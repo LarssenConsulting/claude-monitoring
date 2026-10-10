@@ -1,0 +1,12 @@
+# Système
+.DS_Store
+
+# Consignes et réglages personnels de Claude Code
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Données locales : agrégats d'usage, certificats, scripts SQL, graphe de connaissances
+_cache/
+_ssl/
+_release/
+graphify-out/
