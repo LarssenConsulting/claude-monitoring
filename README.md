@@ -43,8 +43,8 @@ Vous pouvez aussi faire pointer un hôte virtuel Apache ou nginx (MAMP, par exem
 
 ## Confidentialité
 
-- Les pages ne répondent qu'aux requêtes venant de l'ordinateur lui-même (`127.0.0.1` ou `::1`) ; toute autre adresse reçoit une erreur 403. Derrière un proxy inverse, cette protection ne suffit plus : ne publiez pas ces pages sur un réseau.
-- Les variables d'environnement des serveurs MCP et les informations de votre compte ne sont jamais affichées.
+- Les pages ne répondent qu'aux requêtes venant de l'ordinateur lui-même (`127.0.0.1` ou `::1`) et adressées à un nom d'hôte local : `localhost`, `127.0.0.1`, ou un nom en `.test`, `.local` ou `.localhost`. Toute autre requête reçoit une erreur 403. Derrière un proxy inverse, cette protection ne suffit plus : ne publiez pas ces pages sur un réseau.
+- Les variables d'environnement des serveurs MCP et les informations de votre compte ne sont jamais affichées. Dans les commandes et adresses des serveurs MCP, les identifiants, les paramètres d'URL et les valeurs qui ressemblent à une clé sont masqués.
 - Les polices sont chargées depuis Google Fonts : c'est la seule requête vers l'extérieur.
 
 ## À savoir
@@ -68,3 +68,7 @@ assets/js/app.js     Recherche dans la page
 ```
 
 Le fichier `CLAUDE.md` décrit le fonctionnement interne pour qui veut modifier le code avec Claude Code.
+
+## Licence
+
+Code publié sous licence MIT : voir le fichier [LICENSE](LICENSE).

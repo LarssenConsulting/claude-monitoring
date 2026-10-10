@@ -15,7 +15,54 @@ function home_dir(): string
 
 function is_local_request(): bool
 {
-    return in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true);
+    if (!in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)) {
+        return false;
+    }
+    // Contre le « DNS rebinding » : un site malveillant peut faire pointer son domaine vers 127.0.0.1
+    // et lire la page depuis le navigateur. On n'accepte donc que des noms d'hôte locaux,
+    // qu'aucun domaine public ne peut porter.
+    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+    $host = trim((string) preg_replace('/:\d+$/', '', $host), '[]');
+    return in_array($host, ['localhost', '127.0.0.1', '::1'], true)
+        || preg_match('/\.(test|localhost|local)$/', $host) === 1;
+}
+
+/** Adresse sans identifiants ni paramètres : ils peuvent contenir une clé ou un jeton. */
+function safe_url(string $url): string
+{
+    $parts = parse_url($url);
+    if (!isset($parts['host'])) {
+        return '';
+    }
+    return ($parts['scheme'] ?? 'https') . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '') . ($parts['path'] ?? '');
+}
+
+/** Commande et arguments d'un serveur MCP, sans les valeurs qui ressemblent à un secret. */
+function safe_command(string $command, array $args): string
+{
+    $sensitive = '/key|token|secret|passw|auth|credential|bearer|cookie|session/i';
+    $out = [basename($command) === $command ? $command : short_path($command)];
+    $maskNext = false;
+    foreach ($args as $arg) {
+        $arg = (string) $arg;
+        if ($maskNext) {
+            $out[] = '•••';
+            $maskNext = false;
+        } elseif (preg_match('#^[a-z][a-z0-9+.-]*://#i', $arg)) {
+            $out[] = safe_url($arg);
+        } elseif (preg_match('/^(-{0,2}[\w.-]+)=(.*)$/s', $arg, $m)) {
+            $out[] = $m[1] . '=' . (preg_match($sensitive, $m[1]) || strlen($m[2]) >= 20 ? '•••' : $m[2]);
+        } elseif ($arg !== '' && $arg[0] === '-') {
+            $out[] = $arg;
+            $maskNext = preg_match($sensitive, $arg) === 1;
+        } elseif (preg_match('/^[A-Za-z0-9_\-+=.]{24,}$/', $arg) && preg_match('/\d/', $arg)) {
+            // Longue chaîne mêlant lettres et chiffres : probablement une clé passée en argument.
+            $out[] = '•••';
+        } else {
+            $out[] = short_path($arg);
+        }
+    }
+    return trim(implode(' ', $out));
 }
 
 function read_json(string $file): array
@@ -180,7 +227,9 @@ function build_inventory(): array
     $addMcp = static function (array $servers, string $source, string $scope, array $needsAuth = [], string $authPrefix = '') use (&$inv): void {
         foreach ($servers as $name => $server) {
             $server = (array) $server;
-            $how = $server['url'] ?? trim(($server['command'] ?? '') . ' ' . implode(' ', (array) ($server['args'] ?? [])));
+            $how = isset($server['url'])
+                ? safe_url((string) $server['url'])
+                : safe_command((string) ($server['command'] ?? ''), (array) ($server['args'] ?? []));
             $inv['mcp'][] = [
                 'source' => $source, 'name' => $name, 'scope' => $scope, 'how' => $how,
                 'type' => $server['type'] ?? (isset($server['url']) ? 'http' : 'stdio'),
@@ -223,14 +272,18 @@ function build_inventory(): array
             'version' => (string) ($manifest['version'] ?? $install['version'] ?? ''),
             'desc' => (string) ($manifest['description'] ?? $entry['description'] ?? ''),
             'author' => (string) ($manifest['author']['name'] ?? $entry['author']['name'] ?? ''),
-            'homepage' => (string) ($manifest['homepage'] ?? $manifest['repository'] ?? ''),
+            // Le manifeste d'un plugin n'est pas une source sûre : seul un lien http(s) devient cliquable.
+            'homepage' => preg_match('#^https?://#i', (string) ($manifest['homepage'] ?? $manifest['repository'] ?? ''))
+                ? (string) ($manifest['homepage'] ?? $manifest['repository']) : '',
             'origin' => $market, 'installedAt' => $install['installedAt'] ?? '', 'updatedAt' => $install['lastUpdated'] ?? '',
             'uses' => (int) ($usage['usageCount'] ?? 0),
         ];
 
         // Le manifeste peut déplacer un dossier : chemin unique ou liste de chemins relatifs.
         $dirs = static function (string $type) use ($manifest, $path): array {
-            $list = array_filter((array) ($manifest[$type] ?? []), 'is_string') ?: [$type];
+            // Chemins relatifs au plugin uniquement : ni chemin absolu, ni remontée par « .. ».
+            $inside = static fn($dir) => is_string($dir) && $dir !== '' && $dir[0] !== '/' && !str_contains($dir, '..');
+            $list = array_filter((array) ($manifest[$type] ?? []), $inside) ?: [$type];
             return array_map(static fn($dir) => rtrim($path . '/' . preg_replace('#^\./#', '', $dir), '/'), $list);
         };
         foreach ($dirs('skills') as $dir) {
@@ -352,7 +405,12 @@ function build_inventory(): array
         'installMethod' => (string) ($state['installMethod'] ?? ''),
         'firstStart' => (string) ($state['firstStartTime'] ?? ''),
         'startups' => (int) ($state['numStartups'] ?? 0),
-        'settings' => array_filter($settings, static fn($v) => is_scalar($v)),
+        // Réglages simples uniquement, sans ceux dont le nom évoque un secret ou une commande d'authentification.
+        'settings' => array_filter(
+            $settings,
+            static fn($value, $name) => is_scalar($value) && !preg_match('/key|token|secret|passw|auth|credential|helper/i', (string) $name),
+            ARRAY_FILTER_USE_BOTH
+        ),
     ];
 
     return $inv;

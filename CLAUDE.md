@@ -47,7 +47,8 @@ Le cache de la page d'usage est écrit dans `../_cache/usage.json`, c'est-à-dir
 
 ## Règles de code
 
-- **Confidentialité** : les pages ne répondent qu'aux requêtes locales (`is_local_request()`) et n'affichent jamais les variables `env` des serveurs MCP ni les informations du compte. Conserver ces deux garde-fous.
+- **Confidentialité** : les pages ne répondent qu'aux requêtes locales adressées à un nom d'hôte local (`is_local_request()`, qui vérifie l'adresse du client et l'en-tête `Host` contre le DNS rebinding). Elles n'affichent jamais les variables `env` des serveurs MCP ni les informations du compte, et toute commande ou adresse de serveur MCP passe par `safe_command()` ou `safe_url()`, qui masquent les secrets. Conserver ces garde-fous.
+- Les manifestes de plugins ne sont pas des sources sûres : un lien n'est cliquable que s'il est en `http(s)`, et un chemin déclaré par un plugin doit rester à l'intérieur de son dossier.
 - Toute valeur lue sur le disque passe par `e()` avant affichage.
 - Pas de CSS ni de JS en ligne dans les pages (`<style>`, `style=""`, `<script>` avec du code) : uniquement `assets/css/style.css` et `assets/js/app.js`. Les graphiques SVG utilisent des attributs de géométrie et des classes, jamais `style`.
 - Les textes de l'interface et la documentation sont en français, avec les accents.
