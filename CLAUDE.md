@@ -47,7 +47,8 @@ Le cache de la page d'usage est écrit dans `../_cache/usage.json`, c'est-à-dir
 
 ## Règles de code
 
-- **Confidentialité** : les pages ne répondent qu'aux requêtes locales adressées à un nom d'hôte local (`is_local_request()`, qui vérifie l'adresse du client et l'en-tête `Host` contre le DNS rebinding). Elles n'affichent jamais les variables `env` des serveurs MCP ni les informations du compte, et toute commande ou adresse de serveur MCP passe par `safe_command()` ou `safe_url()`, qui masquent les secrets. Conserver ces garde-fous.
+- **Confidentialité** : les pages ne répondent qu'aux requêtes locales adressées à un nom d'hôte local (`is_local_request()`, qui vérifie l'adresse du client et l'en-tête `Host` contre le DNS rebinding). Seuls `localhost`, l'adresse de bouclage et les domaines `.test` et `.localhost` sont acceptés ; `.local` est refusé (mDNS). Elles n'affichent jamais les variables `env` des serveurs MCP ni les informations du compte. Conserver ces garde-fous.
+- **Liste blanche, pas de détection de secrets** : toute valeur issue d'une commande, d'une adresse ou d'un réglage passe par `safe_command()`, `safe_url()`, `hook_script()` ou `safe_settings()`, qui ne laissent passer que des formes reconnues (programme et nom de paquet, nom de domaine, nom de script, booléens et nombres). Ne jamais afficher une commande, une URL ou une chaîne de configuration brute, même « nettoyée ».
 - Les manifestes de plugins ne sont pas des sources sûres : un lien n'est cliquable que s'il est en `http(s)`, et un chemin déclaré par un plugin doit rester à l'intérieur de son dossier.
 - Toute valeur lue sur le disque passe par `e()` avant affichage.
 - Pas de CSS ni de JS en ligne dans les pages (`<style>`, `style=""`, `<script>` avec du code) : uniquement `assets/css/style.css` et `assets/js/app.js`. Les graphiques SVG utilisent des attributs de géométrie et des classes, jamais `style`.

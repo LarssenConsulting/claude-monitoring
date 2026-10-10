@@ -19,50 +19,61 @@ function is_local_request(): bool
         return false;
     }
     // Contre le « DNS rebinding » : un site malveillant peut faire pointer son domaine vers 127.0.0.1
-    // et lire la page depuis le navigateur. On n'accepte donc que des noms d'hôte locaux,
-    // qu'aucun domaine public ne peut porter.
+    // et lire la page depuis le navigateur. On n'accepte donc que des noms d'hôte qu'aucun DNS public
+    // ne résout : l'adresse de bouclage, localhost, et les domaines réservés .test et .localhost.
+    // Les noms en .local sont refusés : ils s'annoncent sur le réseau local (mDNS).
     $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
-    $host = trim((string) preg_replace('/:\d+$/', '', $host), '[]');
-    return in_array($host, ['localhost', '127.0.0.1', '::1'], true)
-        || preg_match('/\.(test|localhost|local)$/', $host) === 1;
+    if (preg_match('/^\[([0-9a-f:]+)\](?::\d{1,5})?\z/', $host, $m)) {
+        return $m[1] === '::1';
+    }
+    if (!preg_match('/^([a-z0-9.-]+)(?::\d{1,5})?\z/', $host, $m)) {
+        return false;
+    }
+    return in_array($m[1], ['localhost', '127.0.0.1'], true)
+        || preg_match('/^(?:[a-z0-9-]+\.)+(?:test|localhost)\z/', $m[1]) === 1;
 }
 
-/** Adresse sans identifiants ni paramètres : ils peuvent contenir une clé ou un jeton. */
+/**
+ * Adresse d'un serveur MCP réduite à « schéma://hôte ».
+ * Identifiants, chemin et paramètres sont retirés : chacun peut porter une clé ou un jeton.
+ */
 function safe_url(string $url): string
 {
     $parts = parse_url($url);
-    if (!isset($parts['host'])) {
+    if (!is_array($parts) || !isset($parts['host']) || !preg_match('/^[a-z0-9.-]+\z/i', $parts['host'])) {
         return '';
     }
-    return ($parts['scheme'] ?? 'https') . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '') . ($parts['path'] ?? '');
+    return strtolower($parts['scheme'] ?? 'https') . '://' . strtolower($parts['host']);
 }
 
-/** Commande et arguments d'un serveur MCP, sans les valeurs qui ressemblent à un secret. */
+/**
+ * Lancement d'un serveur MCP réduit à ce qui est sûr à afficher : le programme et le paquet lancé.
+ * Liste blanche, pas de détection de secrets : options et autres arguments ne sont jamais affichés.
+ */
 function safe_command(string $command, array $args): string
 {
-    $sensitive = '/key|token|secret|passw|auth|credential|bearer|cookie|session/i';
-    $out = [basename($command) === $command ? $command : short_path($command)];
-    $maskNext = false;
-    foreach ($args as $arg) {
-        $arg = (string) $arg;
-        if ($maskNext) {
-            $out[] = '•••';
-            $maskNext = false;
-        } elseif (preg_match('#^[a-z][a-z0-9+.-]*://#i', $arg)) {
-            $out[] = safe_url($arg);
-        } elseif (preg_match('/^(-{0,2}[\w.-]+)=(.*)$/s', $arg, $m)) {
-            $out[] = $m[1] . '=' . (preg_match($sensitive, $m[1]) || strlen($m[2]) >= 20 ? '•••' : $m[2]);
-        } elseif ($arg !== '' && $arg[0] === '-') {
-            $out[] = $arg;
-            $maskNext = preg_match($sensitive, $arg) === 1;
-        } elseif (preg_match('/^[A-Za-z0-9_\-+=.]{24,}$/', $arg) && preg_match('/\d/', $arg)) {
-            // Longue chaîne mêlant lettres et chiffres : probablement une clé passée en argument.
-            $out[] = '•••';
-        } else {
-            $out[] = short_path($arg);
-        }
+    $command = trim($command);
+    $program = basename(strtok($command, " \t") ?: '');
+    if (!preg_match('/^[\w.+-]{1,40}\z/', $program)) {
+        return '';
     }
-    return trim(implode(' ', $out));
+    foreach ($args as $arg) {
+        if (!is_string($arg) || $arg === '' || $arg[0] === '-') {
+            continue;
+        }
+        // Premier argument qui n'est pas une option : nom de paquet (npm, PyPI) ou fichier de script.
+        // Un nom long contenant des chiffres est écarté : il pourrait s'agir d'une clé passée en argument.
+        $name = preg_replace('/@[^@\/]*\z/', '', $arg);
+        $plausible = strlen($name) < 20 || !preg_match('/\d/', $name);
+        if ($plausible && preg_match('#^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z][a-z0-9._-]{1,50}(?:@[a-z0-9][a-z0-9._-]{0,20})?\z#', $arg)) {
+            return $program . ' ' . $arg;
+        }
+        if (preg_match('#(?:^|/)([\w.-]{1,50}\.(?:js|mjs|cjs|ts|py|sh))\z#', $arg, $m)) {
+            return $program . ' ' . $m[1];
+        }
+        break;
+    }
+    return $program;
 }
 
 function read_json(string $file): array
@@ -132,14 +143,35 @@ function short_path(string $path): string
     return str_starts_with($path, $home) ? '~' . substr($path, strlen($home)) : $path;
 }
 
-/** Nom du script lancé par une commande de hook. */
+/**
+ * Nom affichable d'un hook : le fichier de script lancé, sinon le programme.
+ * Jamais le reste de la commande, qui peut contenir une adresse de webhook ou un jeton.
+ */
 function hook_script(string $command): string
 {
-    if (preg_match_all('/[\w.-]+\.(?:py|sh|js|mjs|cmd|ts)\b/', $command, $m)) {
-        return end($m[0]);
+    if (preg_match_all('#(?:^|[\s/"\'=])([A-Za-z][\w.-]{0,60}\.(?:py|sh|js|mjs|cjs|cmd|ts|php|rb))(?=$|[\s"\'])#', $command, $m)) {
+        return end($m[1]);
     }
-    $words = preg_split('/\s+/', trim($command));
-    return basename((string) end($words));
+    $program = basename(strtok(trim($command), " \t") ?: '');
+    return preg_match('/^[\w.+-]{1,40}\z/', $program) ? $program : 'commande';
+}
+
+/**
+ * Réglages affichables : booléens et nombres tels quels ; les textes seulement pour des réglages connus
+ * et sans secret. Tout autre texte est signalé comme « défini » sans montrer sa valeur.
+ */
+function safe_settings(array $settings): array
+{
+    $plain = ['model', 'outputStyle', 'theme', 'editorMode', 'effortLevel', 'language', 'autoUpdatesChannel', 'preferredNotifChannel'];
+    $out = [];
+    foreach ($settings as $name => $value) {
+        if (is_bool($value) || is_int($value) || is_float($value)) {
+            $out[$name] = $value;
+        } elseif (is_string($value)) {
+            $out[$name] = in_array($name, $plain, true) && preg_match('/^[\w .:\[\]-]{1,60}\z/', $value) ? $value : '(défini)';
+        }
+    }
+    return $out;
 }
 
 function claude_version(string $home, array $state): string
@@ -267,14 +299,29 @@ function build_inventory(): array
         $enabled = (bool) ($settings['enabledPlugins'][$key] ?? false);
         $usage = $state['pluginUsage'][$key] ?? [];
 
+        // Adresse du plugin : celle de son manifeste, sinon celle du catalogue, sinon le dépôt d'où il est installé.
+        // Un manifeste n'est pas une source sûre : seul un lien http(s) devient cliquable.
+        $source = $marketplaces[$market]['source'] ?? [];
+        $homepage = '';
+        foreach ([
+            $manifest['homepage'] ?? '',
+            $manifest['repository'] ?? '',
+            $entry['homepage'] ?? '',
+            isset($source['repo']) ? 'https://github.com/' . $source['repo'] : '',
+            preg_replace('/\.git$/', '', (string) ($source['url'] ?? '')),
+        ] as $candidate) {
+            if (is_string($candidate) && preg_match('#^https?://#i', $candidate)) {
+                $homepage = $candidate;
+                break;
+            }
+        }
+
         $inv['sources'][$key] = [
             'label' => $name, 'kind' => 'plugin', 'enabled' => $enabled,
             'version' => (string) ($manifest['version'] ?? $install['version'] ?? ''),
             'desc' => (string) ($manifest['description'] ?? $entry['description'] ?? ''),
             'author' => (string) ($manifest['author']['name'] ?? $entry['author']['name'] ?? ''),
-            // Le manifeste d'un plugin n'est pas une source sûre : seul un lien http(s) devient cliquable.
-            'homepage' => preg_match('#^https?://#i', (string) ($manifest['homepage'] ?? $manifest['repository'] ?? ''))
-                ? (string) ($manifest['homepage'] ?? $manifest['repository']) : '',
+            'homepage' => $homepage,
             'origin' => $market, 'installedAt' => $install['installedAt'] ?? '', 'updatedAt' => $install['lastUpdated'] ?? '',
             'uses' => (int) ($usage['usageCount'] ?? 0),
         ];
@@ -405,12 +452,7 @@ function build_inventory(): array
         'installMethod' => (string) ($state['installMethod'] ?? ''),
         'firstStart' => (string) ($state['firstStartTime'] ?? ''),
         'startups' => (int) ($state['numStartups'] ?? 0),
-        // Réglages simples uniquement, sans ceux dont le nom évoque un secret ou une commande d'authentification.
-        'settings' => array_filter(
-            $settings,
-            static fn($value, $name) => is_scalar($value) && !preg_match('/key|token|secret|passw|auth|credential|helper/i', (string) $name),
-            ARRAY_FILTER_USE_BOTH
-        ),
+        'settings' => safe_settings($settings),
     ];
 
     return $inv;

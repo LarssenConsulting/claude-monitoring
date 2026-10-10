@@ -43,8 +43,10 @@ Vous pouvez aussi faire pointer un hôte virtuel Apache ou nginx (MAMP, par exem
 
 ## Confidentialité
 
-- Les pages ne répondent qu'aux requêtes venant de l'ordinateur lui-même (`127.0.0.1` ou `::1`) et adressées à un nom d'hôte local : `localhost`, `127.0.0.1`, ou un nom en `.test`, `.local` ou `.localhost`. Toute autre requête reçoit une erreur 403. Derrière un proxy inverse, cette protection ne suffit plus : ne publiez pas ces pages sur un réseau.
-- Les variables d'environnement des serveurs MCP et les informations de votre compte ne sont jamais affichées. Dans les commandes et adresses des serveurs MCP, les identifiants, les paramètres d'URL et les valeurs qui ressemblent à une clé sont masqués.
+- Les pages ne répondent qu'aux requêtes venant de l'ordinateur lui-même (`127.0.0.1` ou `::1`) et adressées à un nom d'hôte local : `localhost`, `127.0.0.1`, `[::1]`, ou un nom en `.test` ou `.localhost`. Toute autre requête reçoit une erreur 403, y compris sur un nom en `.local`. Derrière un proxy inverse, cette protection ne suffit plus : ne publiez pas ces pages sur un réseau.
+- Les variables d'environnement des serveurs MCP et les informations de votre compte ne sont jamais affichées.
+- Pour un serveur MCP, seuls le programme et le paquet lancés sont affichés (`npx nom-du-paquet`), ou le nom de domaine pour une adresse : jamais les options, les autres arguments, le chemin ni les paramètres d'une URL. Pour un hook, seul le nom du script ou du programme apparaît. Les réglages en texte libre sont indiqués comme « définis » sans leur valeur.
+- La page d'installation affiche en entier votre fichier `~/.claude/CLAUDE.md` : n'y mettez pas de secret.
 - Les polices sont chargées depuis Google Fonts : c'est la seule requête vers l'extérieur.
 
 ## À savoir
