@@ -39,13 +39,22 @@ php -S 127.0.0.1:8000
 
 Ouvrez ensuite http://127.0.0.1:8000.
 
-Vous pouvez aussi faire pointer un hôte virtuel Apache ou nginx (MAMP, par exemple) sur le dossier du dépôt.
+Vous pouvez aussi faire pointer un hôte virtuel Apache ou nginx (MAMP, par exemple) sur le dossier du dépôt. Dans ce cas, déclarez son nom dans un fichier `config.local.php` à la racine du dépôt, sinon les pages répondent par une erreur 403 :
+
+```php
+<?php
+return [
+    'hosts' => ['mon-site.test'],
+];
+```
+
+Ce fichier est ignoré par git.
 
 ## Confidentialité
 
-- Les pages ne répondent qu'aux requêtes venant de l'ordinateur lui-même (`127.0.0.1` ou `::1`) et adressées à un nom d'hôte local : `localhost`, `127.0.0.1`, `[::1]`, ou un nom en `.test` ou `.localhost`. Toute autre requête reçoit une erreur 403, y compris sur un nom en `.local`. Derrière un proxy inverse, cette protection ne suffit plus : ne publiez pas ces pages sur un réseau.
+- Les pages ne répondent qu'aux requêtes venant de l'ordinateur lui-même (`127.0.0.1` ou `::1`) et adressées à un nom d'hôte autorisé : `localhost`, `127.0.0.1`, `[::1]`, ou un nom déclaré dans `config.local.php`. Toute autre requête reçoit une erreur 403. Cette liste fermée empêche un site web malveillant de lire les pages à travers votre navigateur. Derrière un proxy inverse, cette protection ne suffit plus : ne publiez pas ces pages sur un réseau.
 - Les variables d'environnement des serveurs MCP et les informations de votre compte ne sont jamais affichées.
-- Pour un serveur MCP, seuls le programme et le paquet lancés sont affichés (`npx nom-du-paquet`), ou le nom de domaine pour une adresse : jamais les options, les autres arguments, le chemin ni les paramètres d'une URL. Pour un hook, seul le nom du script ou du programme apparaît. Les réglages en texte libre sont indiqués comme « définis » sans leur valeur.
+- Pour un serveur MCP, seuls le programme et le paquet lancés sont affichés (`npx nom-du-paquet`), ou le nom de domaine pour une adresse : jamais les options, les autres arguments, le chemin ni les paramètres d'une URL. Pour un hook, seul le nom du script ou du programme apparaît. Les réglages en texte libre sont indiqués comme « définis » sans leur valeur. Les liens vers les dépôts de plugins sont débarrassés de leurs éventuels identifiants.
 - La page d'installation affiche en entier votre fichier `~/.claude/CLAUDE.md` : n'y mettez pas de secret.
 - Les polices sont chargées depuis Google Fonts : c'est la seule requête vers l'extérieur.
 

@@ -1,6 +1,9 @@
 # Système
 .DS_Store
 
+# Configuration locale (noms d'hôte autorisés)
+config.local.php
+
 # Consignes et réglages personnels de Claude Code
 CLAUDE.local.md
 .claude/settings.local.json

@@ -19,9 +19,8 @@ function is_local_request(): bool
         return false;
     }
     // Contre le « DNS rebinding » : un site malveillant peut faire pointer son domaine vers 127.0.0.1
-    // et lire la page depuis le navigateur. On n'accepte donc que des noms d'hôte qu'aucun DNS public
-    // ne résout : l'adresse de bouclage, localhost, et les domaines réservés .test et .localhost.
-    // Les noms en .local sont refusés : ils s'annoncent sur le réseau local (mDNS).
+    // et lire la page depuis le navigateur. Le nom d'hôte demandé doit donc figurer, à l'identique,
+    // dans une liste fermée : aucun suffixe générique (.test, .local…) n'est accepté.
     $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
     if (preg_match('/^\[([0-9a-f:]+)\](?::\d{1,5})?\z/', $host, $m)) {
         return $m[1] === '::1';
@@ -29,8 +28,40 @@ function is_local_request(): bool
     if (!preg_match('/^([a-z0-9.-]+)(?::\d{1,5})?\z/', $host, $m)) {
         return false;
     }
-    return in_array($m[1], ['localhost', '127.0.0.1'], true)
-        || preg_match('/^(?:[a-z0-9-]+\.)+(?:test|localhost)\z/', $m[1]) === 1;
+    return in_array($m[1], allowed_hosts(), true);
+}
+
+/**
+ * Noms d'hôte autorisés : localhost et l'adresse de bouclage, plus ceux déclarés dans config.local.php
+ * (fichier hors dépôt, à la racine du site) sous la forme : return ['hosts' => ['mon-site.test']];
+ */
+function allowed_hosts(): array
+{
+    $hosts = ['localhost', '127.0.0.1'];
+    $file = dirname(__DIR__) . '/config.local.php';
+    $config = is_file($file) ? include $file : [];
+    foreach ((array) (is_array($config) ? ($config['hosts'] ?? []) : []) as $host) {
+        if (is_string($host) && preg_match('/^[a-z0-9.-]+\z/i', $host)) {
+            $hosts[] = strtolower($host);
+        }
+    }
+    return $hosts;
+}
+
+/**
+ * Lien public vers un dépôt ou une page : http(s) uniquement, sans identifiants, paramètres ni fragment.
+ * L'adresse d'un dépôt peut embarquer un jeton (https://utilisateur:jeton@hôte/…).
+ */
+function public_link(string $url): string
+{
+    $parts = parse_url(trim($url));
+    if (!is_array($parts) || !in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)
+        || !preg_match('/^[a-z0-9.-]+\z/i', $parts['host'] ?? '')) {
+        return '';
+    }
+    $path = preg_replace('/\.git\z/', '', $parts['path'] ?? '');
+    $path = preg_match('#^[\w./~@%+-]*\z#', $path) ? $path : '';
+    return strtolower($parts['scheme']) . '://' . strtolower($parts['host']) . $path;
 }
 
 /**
@@ -307,11 +338,10 @@ function build_inventory(): array
             $manifest['homepage'] ?? '',
             $manifest['repository'] ?? '',
             $entry['homepage'] ?? '',
-            isset($source['repo']) ? 'https://github.com/' . $source['repo'] : '',
-            preg_replace('/\.git$/', '', (string) ($source['url'] ?? '')),
+            isset($source['repo']) && is_string($source['repo']) ? 'https://github.com/' . $source['repo'] : '',
+            $source['url'] ?? '',
         ] as $candidate) {
-            if (is_string($candidate) && preg_match('#^https?://#i', $candidate)) {
-                $homepage = $candidate;
+            if (is_string($candidate) && ($homepage = public_link($candidate)) !== '') {
                 break;
             }
         }
@@ -442,7 +472,10 @@ function build_inventory(): array
     foreach ($marketplaces as $name => $market) {
         $inv['marketplaces'][] = [
             'name' => $name,
-            'source' => (string) ($market['source']['repo'] ?? $market['source']['url'] ?? ''),
+            // Dépôt GitHub « propriétaire/nom », ou adresse débarrassée de ses éventuels identifiants.
+            'source' => isset($market['source']['repo']) && preg_match('#^[\w.-]+/[\w.-]+\z#', (string) $market['source']['repo'])
+                ? (string) $market['source']['repo']
+                : public_link((string) ($market['source']['url'] ?? '')),
             'updatedAt' => $market['lastUpdated'] ?? '',
         ];
     }

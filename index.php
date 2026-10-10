@@ -5,7 +5,7 @@ require __DIR__ . '/_inc/view.php';
 // Cette page expose la configuration locale : elle ne répond qu'à cet ordinateur.
 if (!is_local_request()) {
     http_response_code(403);
-    exit('Page réservée à cet ordinateur.');
+    exit("Accès refusé. Cette page ne répond qu'à cet ordinateur, sur localhost ou sur un nom d'hôte déclaré dans config.local.php (voir le README).");
 }
 
 $inv = build_inventory();
