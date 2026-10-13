@@ -39,7 +39,13 @@ php -S 127.0.0.1:8000
 
 Ouvrez ensuite http://127.0.0.1:8000.
 
-Vous pouvez aussi faire pointer un hôte virtuel Apache ou nginx (MAMP, par exemple) sur le dossier du dépôt. Dans ce cas, déclarez son nom dans un fichier `config.local.php` à la racine du dépôt, sinon les pages répondent par une erreur 403 :
+Vous pouvez aussi faire pointer un hôte virtuel Apache ou nginx (MAMP, par exemple) sur le dossier du dépôt. Dans ce cas, les pages répondent par une erreur 403 tant que le nom de cet hôte n'est pas déclaré. Copiez le fichier d'exemple fourni :
+
+```bash
+cp config.local.example.php config.local.php
+```
+
+Puis remplacez `mon-site.test` par le nom de votre hôte dans `config.local.php` :
 
 ```php
 <?php
@@ -48,7 +54,9 @@ return [
 ];
 ```
 
-Ce fichier est ignoré par git.
+Le nom doit être écrit en entier, sans port ni joker (`*.test` n'est pas accepté). Vous pouvez en indiquer plusieurs. `config.local.php` est ignoré par git : il reste sur votre ordinateur.
+
+Avec `php -S 127.0.0.1:8000`, ce fichier est inutile.
 
 ## Confidentialité
 
