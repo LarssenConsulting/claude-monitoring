@@ -19,7 +19,7 @@ function head_assets(): void
  */
 function page_header(string $current, string $title, string $lede, array $meta, array $kpis, array $sections, bool $search): void
 {
-    $pages = ['installation' => ['./', 'Installation'], 'usage' => ['usage.php', 'Usage']];
+    $pages = ['installation' => ['./', 'Installation'], 'usage' => ['usage.php', 'Usage'], 'live' => ['live.php', 'Live']];
 
     echo '<div class="backdrop" aria-hidden="true"></div>';
     echo '<a class="skip" href="' . e(array_key_first($sections)) . '">Aller au contenu</a>';
@@ -72,6 +72,22 @@ function date_fr(string $iso): string
     $months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
     $day = (int) date('j', $time);
     return ($day === 1 ? '1er' : $day) . ' ' . $months[(int) date('n', $time) - 1] . ' ' . date('Y', $time);
+}
+
+/** Durée en secondes -> « 45 s », « 12 min », « 3 h 05 », « 2 j ». */
+function duration_fr(int $seconds): string
+{
+    $seconds = max(0, $seconds);
+    if ($seconds < 60) {
+        return $seconds . ' s';
+    }
+    if ($seconds < 3600) {
+        return intdiv($seconds, 60) . ' min';
+    }
+    if ($seconds < 86400) {
+        return intdiv($seconds, 3600) . ' h ' . str_pad((string) intdiv($seconds % 3600, 60), 2, '0', STR_PAD_LEFT);
+    }
+    return intdiv($seconds, 86400) . ' j';
 }
 
 function anchor(string $text): string

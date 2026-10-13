@@ -309,6 +309,32 @@ table.bars td.num, table.bars th.num { white-space: nowrap; }
 .facts.plain dt { color: var(--color-muted-foreground); font-size: .82rem; }
 .facts.plain dd { margin: 0; font-family: var(--font-mono); font-size: 1.3rem; font-weight: 600; }
 
+/* --- Sessions en direct --- */
+
+.live { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: var(--space-3); align-items: start; }
+
+.session { min-width: 0; padding: var(--space-4); background: var(--color-muted); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.session.busy { border-color: var(--color-accent); }
+.session h3 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); font-size: .98rem; font-weight: 600; overflow-wrap: anywhere; }
+.session h4 { margin: var(--space-4) 0 var(--space-1); color: var(--color-muted-foreground); font-size: .82rem; font-weight: 500; }
+.session .facts.plain { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin: 0; }
+.session .facts.plain dd { font-size: 1.05rem; }
+.session .about { margin: var(--space-2) 0 0; color: var(--color-muted-foreground); font-family: var(--font-mono); font-size: .8rem; overflow-wrap: anywhere; }
+
+.state {
+  display: inline-flex; align-items: center; gap: 6px; padding: 1px 10px;
+  font-size: .78rem; font-weight: 500; white-space: nowrap;
+  color: var(--color-muted-foreground);
+  border: 1px solid currentColor; border-radius: 999px;
+}
+.state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.session.busy .state { color: var(--color-accent-ink); }
+
+.events { margin: 0; padding: 0; list-style: none; font-family: var(--font-mono); font-size: .84rem; }
+.events li { display: flex; align-items: baseline; gap: var(--space-3); padding: 5px 0; border-top: 1px solid var(--color-border); overflow-wrap: anywhere; }
+.events time { color: var(--color-muted-foreground); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.events .tag { margin-left: auto; color: var(--color-accent-ink); border-color: currentColor; font-family: var(--font-sans); }
+
 /* --- Instructions, réglages --- */
 
 pre.file {

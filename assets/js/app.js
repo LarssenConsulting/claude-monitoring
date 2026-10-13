@@ -65,3 +65,57 @@
   window.addEventListener('hashchange', openTarget);
   openTarget();
 })();
+
+// Page Live : redemande la page toutes les deux secondes et remplace les blocs qui changent.
+// Rien n'est demandé tant que l'onglet est masqué.
+
+(function () {
+  'use strict';
+
+  var regions = ['.kpis', '[data-live]', '#live-time'];
+  var delay = 2000;
+  var timer = null;
+
+  if (!document.querySelector('[data-live]')) {
+    return;
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(refresh, delay);
+  }
+
+  function refresh() {
+    if (document.hidden) {
+      return;
+    }
+    fetch(location.pathname, { cache: 'no-store' })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error(String(response.status));
+        }
+        return response.text();
+      })
+      .then(function (html) {
+        var next = new DOMParser().parseFromString(html, 'text/html');
+        regions.forEach(function (selector) {
+          var fresh = next.querySelector(selector);
+          var current = document.querySelector(selector);
+          if (fresh && current) {
+            current.replaceWith(document.importNode(fresh, true));
+          }
+        });
+      })
+      .catch(function () {
+        document.getElementById('live-error').hidden = false;
+      })
+      .then(schedule);
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) {
+      refresh();
+    }
+  });
+  schedule();
+})();
